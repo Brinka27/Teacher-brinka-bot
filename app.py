@@ -1,3 +1,55 @@
+import os, json, random, requests
+from flask import Flask, request
+
+app = Flask(__name__)
+
+TOKEN = os.environ.get("WHATSAPP_TOKEN")
+PHONE_ID = os.environ.get("PHONE_NUMBER_ID")
+VERIFY = os.environ.get("VERIFY_TOKEN", "brinka123")
+
+def send(to, text):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
+    headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    data = {"messaging_product": "whatsapp", "to": to, "type": "text", "text": {"body": text}}
+    requests.post(url, headers=headers, json=data)
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Teacher Brinka Bot is running", 200
+
+@app.route("/webhook", methods=["GET"])
+def verify():
+    if request.args.get("hub.verify_token") == VERIFY:
+        return request.args.get("hub.challenge"), 200
+    return "Forbidden", 403
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    try:
+        data = request.get_json()
+        msg = data["entry"][0]["changes"][0]["value"]["messages"][0]
+        frm = msg["from"]
+        text = msg.get("text", {}).get("body", "").strip().lower()
+        if text in ["hi", "hello", "hey", "start", "menu"]:
+            send(frm, "Hello! I am Teacher Brinka 🤖\n\nType a grade to start, e.g.:\nGrade 8\nGrade 9\nGrade 10")
+        elif "grade" in text:
+            # find questions for that grade
+            key = None
+            for k in QUESTIONS.keys():
+                if text.replace("grade","").strip() in k.lower():
+                    key = k
+                    break
+            if key:
+                q = random.choice(QUESTIONS[key])
+                opts = "\n".join(q["options"])
+                send(frm, f"{key}\n\n{q['question']}\n\n{opts}\n\nReply with A, B, C or D")
+            else:
+                send(frm, "I don't have that grade yet. Try Grade 8, 9 or 10.")
+        else:
+            send(frm, "Type 'hi' for menu, or type a grade like 'Grade 8' to get a question.")
+    except Exception as e:
+        print("Error:", e)
+    return "OK", 200
 QUESTIONS = {
  "1": {"name": "Sets P1", "list": [
   {"q": "n(U)=30, n(A)=18, n(B)=14, n(A n B)=8. n(A u B)=?", "a": 24, "exp": "18+14-8=24"},
